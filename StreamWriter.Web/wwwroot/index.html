@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTLVB Daily Typeing Challenge</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            box-sizing: border-box;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: #212529;
+            background: #fff;
+        }
+
+        h1 {
+            font-variant: small-caps;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .typing-state {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            font-family: monospace;
+        }
+
+        .word {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .entry {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .typed-letter {
+            user-select: none;
+        }
+
+        .correct-letter {
+            font-size: calc(1.325rem + .9vw);
+            white-space: pre;
+        }
+
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .loading-bar {
+            width: min(20rem, 100%);
+            height: 0.5rem;
+            border-radius: 0.25rem;
+            background-color: #e9ecef;
+            overflow: hidden;
+        }
+
+        .loading-bar::after {
+            content: "";
+            display: block;
+            width: 40%;
+            height: 100%;
+            border-radius: 0.25rem;
+            background-color: #0d6efd;
+            animation: loading 1.2s ease-in-out infinite;
+        }
+
+        @keyframes loading {
+            from {
+                transform: translateX(-100%);
+            }
+
+            to {
+                transform: translateX(250%);
+            }
+        }
+
+        .pending {
+            opacity: 0.25;
+        }
+
+        .corrected {
+            color: #0dcaf0;
+            background-color: rgba(13, 202, 240, 0.25);
+        }
+
+        .wrong {
+            color: #dc3545;
+            background-color: rgba(220, 53, 69, 0.25);
+        }
+    </style>
+</head>
+
+<body>
+    <h1>HTLVB Daily Typing Challenge</h1>
+
+    <main>
+        <div id="loading" class="loading">
+            <div class="loading-bar"></div>
+            <span>Lade Text ...</span>
+        </div>
+
+        <div id="typing-state" class="typing-state"></div>
+
+        <span id="wpm"></span>
+    </main>
+
+    <script>
+        async function loadDailyChallengeText() {
+            const response = await fetch('/daily-challenge/text')
+            return await response.text()
+        }
+
+        function getEmptyTypingState(text) {
+            return text.split("").map(c => ({
+                timestamp: null,
+                typedLetter: null,
+                errorCount: 0,
+                correctLetter: c
+            }))
+        }
+
+        let typingState = []
+        let typingStateIndex = 0
+        let wpm = null
+
+        function getTypedLetterText(entry) {
+            if (entry.typedLetter === null || entry.typedLetter === entry.correctLetter) {
+                return " " // &nbsp;
+            }
+            if (entry.typedLetter === " ") return "␣" // &blank;
+            return entry.typedLetter
+        }
+
+        function getCorrectLetterClass(entry) {
+            if (entry.timestamp !== null) {
+                if (entry.typedLetter === entry.correctLetter) {
+                    if (entry.errorCount === 0) {
+                        return ""
+                    }
+                    return "corrected"
+                }
+                return "wrong"
+            }
+            return "pending"
+        }
+
+        function render() {
+            const container = document.getElementById("typing-state")
+            container.innerHTML = ""
+            let wordElement = null
+            for (const entry of typingState) {
+                if (wordElement === null) {
+                    wordElement = document.createElement("div")
+                    wordElement.className = "word"
+                    container.append(wordElement)
+                }
+
+                const entryElement = document.createElement("div")
+                entryElement.className = "entry"
+
+                const typedLetterElement = document.createElement("div")
+                typedLetterElement.className = "typed-letter"
+                typedLetterElement.textContent = getTypedLetterText(entry)
+
+                const correctLetterElement = document.createElement("div")
+                correctLetterElement.className = `correct-letter ${getCorrectLetterClass(entry)}`
+                correctLetterElement.textContent = entry.correctLetter
+
+                entryElement.append(typedLetterElement, correctLetterElement)
+                wordElement.append(entryElement)
+
+                if (entry.correctLetter === " ") {
+                    wordElement = null
+                }
+            }
+
+            document.getElementById("wpm").textContent =
+                wpm !== null ? `WPM: ${wpm.toFixed(2)}` : ""
+        }
+
+        function onKeyDown(key) {
+            if (typingStateIndex >= typingState.length) {
+                return
+            }
+            if (key === "Backspace") {
+                if (typingStateIndex > 0) {
+                    typingStateIndex--
+                }
+                typingState[typingStateIndex].timestamp = null
+                typingState[typingStateIndex].typedLetter = null
+            }
+            else if (key.length === 1) {
+                typingState[typingStateIndex].timestamp = Date.now()
+                typingState[typingStateIndex].typedLetter = key
+                if (key !== typingState[typingStateIndex].correctLetter) {
+                    typingState[typingStateIndex].errorCount += 1
+                }
+                typingStateIndex++
+            }
+
+            if (typingStateIndex >= typingState.length) {
+                wpm = calculateWPM()
+            }
+            render()
+        }
+
+        function calculateWPM() {
+            return countCorrectlyTypedLetters() / (5 * getTypingDurationInMinutes())
+        }
+
+        function countCorrectlyTypedLetters() {
+            return typingState.filter(entry => entry.typedLetter === entry.correctLetter).length
+        }
+
+        function getTypingDurationInMinutes() {
+            const durationMs = typingState[typingState.length - 1].timestamp - typingState[0].timestamp
+            return durationMs / 1000 / 60
+        }
+
+        document.addEventListener("keydown", e => {
+            if (e.ctrlKey || e.altKey) return
+
+            if (e.key === " " || e.key === "'" || e.key === "Backspace") {
+                e.preventDefault()
+            }
+            onKeyDown(e.key)
+        })
+
+        async function initialize() {
+            const text = await loadDailyChallengeText()
+            typingState = getEmptyTypingState(text)
+            document.getElementById("loading").remove()
+            render()
+        }
+
+        initialize()
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,6 @@
+@StreamWriter_HostAddress = http://localhost:5030
+
+GET {{StreamWriter_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
