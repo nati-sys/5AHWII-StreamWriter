@@ -36,10 +36,8 @@ az containerapp create `
   --target-port 8080 `
   --ingress external `
   --min-replicas 0 `
-  --max-replicas 1 `
-  --system-assigned | Out-Null
+  --max-replicas 1 | Out-Null
 
-# Fully qualified domain name
 $Fqdn = az containerapp show `
   --resource-group $ResourceGroup `
   --name $ContainerAppName `
@@ -48,5 +46,8 @@ $Fqdn = az containerapp show `
 Write-Host "=== Container app running at https://$Fqdn"
 
 <#
+# Managed Identity kann nicht in Express-Environment verwendet werden
+az containerapp identity remove -g $ResourceGroup -n $ContainerAppName --system-assigned 2>&1 | Out-Null
+
 az group delete --name rg-streamwriter --yes --no-wait 
 #>
